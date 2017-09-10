@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <vector>
+#include <algorithm>
 
 class Matrix{
 	int cols;
@@ -74,28 +75,60 @@ main(){
 		emission.push_back(e);
 	}
 
-	Matrix alpha = Matrix(a.height(), emission.size());
+	Matrix delta = Matrix(a.height(), emission.size());
+	Matrix deltaIndex = Matrix(a.height(), emission.size());
+
 
 	//Alpha init
-	for(int i = 0; i < alpha.height(); ++i){
-		alpha(i,0) = pi(0,i)*b(i,emission[0]);
+	for(int i = 0; i < delta.height(); ++i){
+		delta(i,0) = pi(0,i)*b(i,emission[0]);
 	}
 
-	//Alpha loop
+	//delta loop
 	for(int t = 1; t < emission.size(); ++t){
-		for(int i = 0; i < alpha.height(); ++i){
-			double sum = 0;
+		for(int i = 0; i < delta.height(); ++i){
+			double currentMax = -1;
+			int currentArgMax = -1;
+			double mightBeNewMax = -1;
 			for(int j = 0; j < a.height(); ++j){
-				sum += a(j,i)*alpha(j,t-1);
+				mightBeNewMax = std::max(currentMax,a(j,i)*delta(j,t-1)*b(i,emission[t]));
+				if(mightBeNewMax > currentMax){
+					currentMax = mightBeNewMax;
+					currentArgMax = j;
+				}
 			}
-			alpha(i,t) = b(i,emission[t])*sum;
+			delta(i,t) = currentMax;
+			deltaIndex(i,t) = currentArgMax;
 		}
 	}
 
 	//Alpha close
-	double sum = 0;
-	for(int i = 0; i < alpha.height(); ++i){
-		sum+=alpha(i, emission.size()-1);
+	std::vector<int> states;
+
+	double largestProbability = -1;
+	double mightBelargestProbability = -1;
+	int index = -1;
+
+	//set index of most probable last state
+	for(int j = 0; j < a.height(); ++j){
+		mightBelargestProbability = std::max(largestProbability,delta(j,emission.size()-1));
+		if(mightBelargestProbability > largestProbability){
+			largestProbability = mightBelargestProbability;
+			index = j;
+		}
 	}
-	std::cout << sum << std::endl;
+	//store most probable last state
+	states.push_back(index);
+	int prev = index;
+	//go down the path
+	for(int t = emission.size()-1;t>0;--t){
+		prev = deltaIndex(prev,t);
+		states.push_back(prev);
+	}
+
+	//output most probable path
+	while(!states.empty()){
+		std::cout << states.back() << " ";
+		states.pop_back();
+	}
 }
