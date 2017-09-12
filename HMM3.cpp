@@ -57,6 +57,16 @@ public:
 		}
 		std::cout << "--------------" << std::endl;
 	}
+	long double squareDistance(Matrix& m2){
+		long double sum = 0;
+		for(int i = 0; i < height(); ++i){
+			for(int j = 0; j < width(); ++j){
+				sum += (m[i][j]-m2(i,j))*(m[i][j]-m2(i,j));
+			}
+		}
+		//std::cout << " NUMbeR = " << sum/2.0 << std::endl;
+		return sum/2.0;
+	}
 };
 
 long double calculateAlpha(Matrix& alpha, std::vector<int> & emission, Matrix& a, Matrix& b, Matrix& pi){
@@ -169,22 +179,6 @@ void updateValues(Matrix& a, Matrix& b, Matrix& pi, Matrix & gamma, std::vector<
 		pi(0,i) = gamma(i,0);
 }
 
-bool continueEpsilon(Matrix& alpha, long double & oldLogProb){
-	long double logProb = 0;
-	for(int t = 0; t < alpha.width(); ++t){
-		long double sum = 0;
-		for(int i = 0; i < alpha.height(); ++i){
-			sum+=alpha(i,t);
-		}
-		logProb += std::log((long double)1/sum);
-	}
-	//std::cout << logProb-oldLogProb << std::endl;
-	if(std::abs(logProb-oldLogProb) < 0.01)
-		return true;
-	oldLogProb = logProb;
-	return false;
-}
-
 main(){
 	Matrix a = Matrix();
 	Matrix b = Matrix();
@@ -192,8 +186,8 @@ main(){
 
 	std::vector<int> emission;
 	getEmission(emission);
-	long double oldLogProb = 0;
-	
+	Matrix oldA = a;
+	Matrix oldB = b;
 	for(int i = 0; i < 30; ++i){
 		Matrix alpha = Matrix(a.height(), emission.size());
 		long double alphaSum = calculateAlpha(alpha, emission, a, b, pi);
@@ -213,11 +207,17 @@ main(){
 		calculateGamma(gamma,diGamma);
 
 		updateValues(a,b,pi,gamma,diGamma, emission);
-		if(continueEpsilon(alpha, oldLogProb)){
-			//std::cout << i << " " << std::endl;
+		/*if(i>28){
+			std::cout << "limit" << std::endl;
+			break;
+		}*/
+		if(a.squareDistance(oldA)<0.0000001&& b.squareDistance(oldB)<0.0000001){
+		//	std::cout << i << " " << std::endl;
 			break;
 		}
-		
+		oldA = a;
+		oldB = b;
+
 	}
 	
 	std::cout << a.height() << " " << a.width() << " ";
