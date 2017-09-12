@@ -3,6 +3,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <limits>
 class Matrix{
 	int cols;
 	int rows;
@@ -64,27 +65,44 @@ public:
 				sum += (m[i][j]-m2(i,j))*(m[i][j]-m2(i,j));
 			}
 		}
-		//std::cout << " NUMbeR = " << sum/2.0 << std::endl;
 		return sum/2.0;
 	}
 };
 
-long double calculateAlpha(Matrix& alpha, std::vector<int> & emission, Matrix& a, Matrix& b, Matrix& pi){
+long double calculateAlpha(Matrix& alpha, std::vector<int> & emission, Matrix& a, Matrix& b, Matrix& pi, std::vector<long double> &scale){
 	//Alpha init
+	long double c0 = 0;
 	for(int i = 0; i < alpha.height(); ++i){
 		alpha(i,0) = pi(0,i)*b(i,emission[0]);
+		c0+=alpha(i,0);
 	}
+
+	c0 = 1.0/c0;
+	for(int i = 0; i < alpha.height(); ++i){
+		alpha(i,0) = c0*alpha(i,0);
+	}
+	scale.push_back(c0);
+
 
 	//Alpha loop
 	for(int t = 1; t < emission.size(); ++t){
+		long double ct = 0;
 		for(int i = 0; i < alpha.height(); ++i){
 			long double sum = 0;
 			for(int j = 0; j < a.height(); ++j){
 				sum += a(j,i)*alpha(j,t-1);
 			}
 			alpha(i,t) = b(i,emission[t])*sum;
+			ct+=alpha(i,t);
 		}
+
+		ct = 1.0/ct;
+		for(int i = 0; i < alpha.height(); ++i){
+			alpha(i,t) = ct*alpha(i,t);
+		}
+		scale.push_back(ct);
 	}
+
 
 	//Alpha close
 	long double sum = 0;
@@ -94,10 +112,10 @@ long double calculateAlpha(Matrix& alpha, std::vector<int> & emission, Matrix& a
 	return sum;
 }
 
-void calculateBeta(Matrix& beta, std::vector<int> & emission, Matrix& a, Matrix& b){
+void calculateBeta(Matrix& beta, std::vector<int> & emission, Matrix& a, Matrix& b, std::vector<long double>& scale){
 	//Beta init
 	for(int i = 0; i < beta.height(); ++i){
-		beta(i,beta.width()-1) = 1;
+		beta(i,beta.width()-1) = scale[beta.width()-1];
 	}
 	
 	//Beta loop
@@ -107,17 +125,17 @@ void calculateBeta(Matrix& beta, std::vector<int> & emission, Matrix& a, Matrix&
 			for(int j = 0; j < beta.height(); ++j){
 				sum += beta(j,t+1)*b(j,emission[t+1])*a(i,j);
 			}
-			beta(i,t) = sum;
+			beta(i,t) = scale[t]*sum;
 		}
 
 	}
 }
 
-void calculateDiGamma(std::vector<Matrix>& diGamma, std::vector<int> & emission, Matrix& a, Matrix& b, Matrix& alpha, Matrix& beta, long double alphaSum){
+void calculateDiGamma(std::vector<Matrix>& diGamma, std::vector<int> & emission, Matrix& a, Matrix& b, Matrix& alpha, Matrix& beta){
 	for(int t = 0; t < diGamma.size(); ++t){
 		for(int i = 0; i < diGamma[0].height(); ++i){
 			for(int j = 0; j < diGamma[0].width(); ++j){
-				diGamma[t](i,j) = (alpha(i,t)*a(i,j)*b(j,emission[t+1])*beta(j,t+1))/alphaSum;	
+				diGamma[t](i,j) = alpha(i,t)*a(i,j)*b(j,emission[t+1])*beta(j,t+1);
 			}
 		}
 
@@ -146,7 +164,7 @@ void calculateGamma(Matrix& gamma, std::vector<Matrix> & diGamma){
 	}
 }
 
-void updateValues(Matrix& a, Matrix& b, Matrix& pi, Matrix & gamma, std::vector<Matrix> & diGamma, std::vector<int> emission){
+void updateValues(Matrix& a, Matrix& b, Matrix& pi, Matrix & gamma, std::vector<Matrix> & diGamma, std::vector<int>& emission){
 	//a
 	for(int i = 0; i < a.height(); ++i){
 		for(int j = 0; j < a.width(); ++j){
@@ -179,66 +197,106 @@ void updateValues(Matrix& a, Matrix& b, Matrix& pi, Matrix & gamma, std::vector<
 		pi(0,i) = gamma(i,0);
 }
 
+bool notProceed(std::vector<long double> & scale, long double& oldLogProb){
+	long double logProb = 0;
+	for(int t = 0; t < scale.size(); ++t){
+		logProb += log(scale[t]);
+	}
+
+	if(0.01 < oldLogProb - logProb){
+		oldLogProb = logProb;
+		return false;
+	}
+	return true;
+}
+
 main(){
 	Matrix a = Matrix();
 	Matrix b = Matrix();
 	Matrix pi = Matrix();
-
+	
+	Matrix a_ = a;
+	Matrix b_ = b;
+	Matrix pi_ = pi;
+	
 	a.print();
 	b.print();
 	pi.print();
-
+	
 	std::vector<int> emission;
 	getEmission(emission);
-	Matrix oldA = a;
-	Matrix oldB = b;
-	for(int i = 0; i < 160; ++i){
-		Matrix alpha = Matrix(a.height(), emission.size());
-		long double alphaSum = calculateAlpha(alpha, emission, a, b, pi);
-
-		Matrix beta = Matrix(a.height(), emission.size());
-		calculateBeta(beta, emission, a, b);
 	
-		std::vector<Matrix> diGamma;
-		Matrix gammaTemp = Matrix(a.height(), a.width());
-		for(int t = 0; t < emission.size()-1; ++t)		 
-			diGamma.push_back(gammaTemp);
-
-	
-		calculateDiGamma(diGamma, emission, a, b, alpha, beta, alphaSum);
-
-		Matrix gamma = Matrix(a.height(), emission.size()-1);
-		calculateGamma(gamma,diGamma);
-
-		updateValues(a,b,pi,gamma,diGamma, emission);
-
-		if(a.squareDistance(oldA)<0.0000001&& b.squareDistance(oldB)<0.0000001){
-			std::cout << i << " " << std::endl;
-			break;
-		}
-		oldA = a;
-		oldB = b;
-
-	}
-
-	a.print();
-	b.print();
-	pi.print();
-	
-	std::cout << a.height() << " " << a.width() << " ";
-	for(int i = 0; i < a.height(); ++i){
-		for(int j = 0; j < a.width(); ++j){
-			std::cout << a(i,j) << " ";
-		}
-	}
-
-	std::cout << std::endl;
-	std::cout << b.height() << " " << b.width() << " ";
-	for(int i = 0; i < b.height(); ++i){
-		for(int j = 0; j < b.width(); ++j){
-			std::cout << b(i,j) << " ";
-		}
-	}
-	std::cout << std::endl;
+	std::vector<int> emissionOld = emission;
+	int observations = 1000;
+	int o = 1;
+	while(observations*o <= emissionOld.size()){
+		a = a_;
+		b = b_;
+		pi = pi_;
+		emission = emissionOld;
+		long double oldLogProb = std::numeric_limits<long double>::max();
 		
+		emission.resize(observations*o);
+		std::cout << "Number of observations: "<<observations*o << std::endl;
+		for(int i = 0; i < 256; ++i){
+			std::vector<long double> scale;
+			Matrix alpha = Matrix(a.height(), emission.size());
+
+			calculateAlpha(alpha, emission, a, b, pi, scale);
+
+			Matrix beta = Matrix(a.height(), emission.size());
+			calculateBeta(beta, emission, a, b, scale);
+		
+			std::vector<Matrix> diGamma;
+			Matrix gammaTemp = Matrix(a.height(), a.width());
+			for(int t = 0; t < emission.size()-1; ++t)		 
+				diGamma.push_back(gammaTemp);
+
+		
+			calculateDiGamma(diGamma, emission, a, b, alpha, beta);
+
+			Matrix gamma = Matrix(a.height(), emission.size()-1);
+			calculateGamma(gamma,diGamma);
+
+			updateValues(a,b,pi,gamma,diGamma, emission);
+
+			if(notProceed(scale, oldLogProb)){
+				std::cout << "Converge: True" << std::endl;
+				std::cout << "Number of iterations " << i+1 << std::endl;
+				break;
+			}
+			else if(i >= 255){
+				std::cout << "Converge: False" << std::endl;
+				std::cout << "Number of iterations " << i+1 << std::endl;
+			}
+		}
+		std::cout << "-A-"<< std::endl;
+		a.print();
+		std::cout << "-B-"<< std::endl;
+		b.print();
+		std::cout << "-Pi-"<< std::endl;
+		pi.print();
+		std::cout << "========" << std::endl;
+
+	
+		/*
+		
+		std::cout << a.height() << " " << a.width() << " ";
+		for(int i = 0; i < a.height(); ++i){
+			for(int j = 0; j < a.width(); ++j){
+				std::cout << a(i,j) << " ";
+			}
+		}
+
+		std::cout << std::endl;
+		std::cout << b.height() << " " << b.width() << " ";
+		for(int i = 0; i < b.height(); ++i){
+			for(int j = 0; j < b.width(); ++j){
+				std::cout << b(i,j) << " ";
+			}
+		}
+		std::cout << std::endl;
+		*/
+		o++;
+	}
 }
