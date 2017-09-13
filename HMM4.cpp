@@ -215,17 +215,21 @@ main(){
 	Matrix b = Matrix();
 	Matrix pi = Matrix();
 	
-	Matrix a_ = a;
-	Matrix b_ = b;
-	Matrix pi_ = pi;
+	//Matrix a_ = a;
+	//Matrix b_ = b;
+	//Matrix pi_ = pi;
 	
+	std::cout << "========" << std::endl;
+	std::cout << "-A-"<< std::endl;
 	a.print();
+	std::cout << "-B-"<< std::endl;
 	b.print();
+	std::cout << "-Pi-"<< std::endl;
 	pi.print();
 	
 	std::vector<int> emission;
 	getEmission(emission);
-	
+	/*
 	std::vector<int> emissionOld = emission;
 	int observations = 1000;
 	int o = 1;
@@ -234,10 +238,11 @@ main(){
 		b = b_;
 		pi = pi_;
 		emission = emissionOld;
+		*/
 		long double oldLogProb = std::numeric_limits<long double>::max();
 		
-		emission.resize(observations*o);
-		std::cout << "Number of observations: "<<observations*o << std::endl;
+		//emission.resize(observations*o);
+		//std::cout << "Number of observations: "<<observations*o << std::endl;
 		for(int i = 0; i < 256; ++i){
 			std::vector<long double> scale;
 			Matrix alpha = Matrix(a.height(), emission.size());
@@ -297,6 +302,6 @@ main(){
 		}
 		std::cout << std::endl;
 		*/
-		o++;
-	}
+		//o++;
+	//}
 }
